@@ -84,7 +84,8 @@ def main():
     ms_per_frame = 1000/60
 
     game = Game()
-    while running:
+    imgui_io: imgui.IO = imgui.get_io()
+    while running and game.status != Game.GameStatus.EXIT:
         tick = SDL_GetTicks64()
         while SDL_PollEvent(ctypes.byref(event)) != 0:
             if event.type == SDL_QUIT or \
@@ -92,8 +93,9 @@ def main():
                 running = False
                 break
             impl.process_event(event)
+            if imgui_io.want_capture_mouse:
+                continue
             if event.type == SDL_MOUSEBUTTONDOWN and event.button.button == 1:
-                cons.log("clicked")
                 game.click_event()
         impl.process_inputs()
 

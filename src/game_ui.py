@@ -1,4 +1,4 @@
-from imgui_bundle import imgui
+from imgui_bundle import imgui, immapp
 import numpy as np
 import math
 
@@ -16,7 +16,7 @@ def get_mouse_grid(left_top_coord: list[float], line_interval: float):
 
 def draw_board(board_state: np.ndarray, player_use_black: bool):
     io = imgui.get_io()
-    draw_list: imgui.ImDrawList = imgui.get_window_draw_list()
+    draw_list: imgui.ImDrawList = imgui.get_background_draw_list()
     board_sz = int(min(*io.display_size) * 0.9)
     board_sz = (board_sz // (game_config.board_size - 1)) * (game_config.board_size - 1)
     center_coord = (io.display_size[0] / 2, io.display_size[1] / 2)
@@ -84,3 +84,34 @@ def draw_board(board_state: np.ndarray, player_use_black: bool):
                                         black_col if board_state[i,j] == 1 else white_col)
 
     return rect_shape_pmin, rect_shape_pmax
+
+
+@immapp.static(popup_opened = False)
+def show_game_result(text):
+    """
+    @return: 0: Retry; 1: Exit. 2: nothing to do.
+    """
+    static = show_game_result
+    if not static.popup_opened:
+        static.popup_opened = True
+        imgui.open_popup("game_result")
+
+    window_sz = (150, 80)
+    imgui.set_next_window_size(window_sz, imgui.Cond_.always)
+    btn_width = 60
+    spacing = 10
+    retval = 2
+    if imgui.begin_popup_modal("game_result", None, imgui.WindowFlags_.no_resize)[0]:
+        imgui.text(text)
+        imgui.set_cursor_pos_x((window_sz[0] - spacing) / 2 - btn_width)
+        if imgui.button("Retry", (btn_width, 0)):
+            static.popup_opened = False
+            imgui.close_current_popup()
+            retval = 0
+        imgui.same_line(spacing = spacing)
+        if imgui.button("Exit", (btn_width, 0)):
+            static.popup_opened = False
+            imgui.close_current_popup()
+            retval = 1
+        imgui.end_popup()
+    return retval
