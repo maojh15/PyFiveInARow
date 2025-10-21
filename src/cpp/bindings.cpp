@@ -11,6 +11,9 @@ PYBIND11_MODULE(py_MCTS, m) {
           .def(py::init<const py::array_t<int>&, int>(),
                py::arg("root_state"), py::arg("stone_id"),
                "构造函数: root_state 为棋盘状态的 numpy 数组, stone_id 表示当前玩家的棋子 ID: 1->black; 2->white。")
+          // public data members (read/write)
+          .def_readwrite("near_playout_policy_distance", &MonteCarloTreeSearch::near_playout_policy_distance)
+          .def_readwrite("playout_policy", &MonteCarloTreeSearch::playout_policy)
           .def("SearchMove", &MonteCarloTreeSearch::SearchMove, py::arg("iter_steps") = 5000,
                "运行 MCTS 搜索并返回最佳落子。\n参数: iter_steps (可选) - 迭代步数，默认 5000。\n返回值: 最佳落子的位置或动作表示。")
           .def("Selection", &MonteCarloTreeSearch::Selection,
@@ -25,6 +28,12 @@ PYBIND11_MODULE(py_MCTS, m) {
                "Get depth of tree")
           .def("StaticDepthNodesNumbers", &MonteCarloTreeSearch::StaticDepthNodesNumbers,
                "返回每个深度上的节点数量（静态统计）。返回值为 std::vector<int>，会被转换为 Python 列表。");
+
+     // bind enum
+     py::enum_<MonteCarloTreeSearch::PlayoutPolicy>(m, "PlayoutPolicy")
+          .value("UniformPlayout", MonteCarloTreeSearch::PlayoutPolicy::UniformPlayout)
+          .value("NearPlacePlayout", MonteCarloTreeSearch::PlayoutPolicy::NearPlacePlayout)
+          .export_values();
     
      py::class_<MonteCarloTreeSearch::TreeNode>(m, "TreeNode")
           .def_readonly("state", &MonteCarloTreeSearch::TreeNode::state)

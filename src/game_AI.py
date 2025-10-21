@@ -13,7 +13,9 @@ def AI_step(board_states: np.ndarray, ai_stone_id: int):
     # best_move = tree.search_move(50000)
 
     tree = py_MCTS.MonteCarloTreeSearch(board_states, ai_stone_id)
-    best_move = tree.SearchMove(40000)
+    tree.playout_policy = py_MCTS.PlayoutPolicy.NearPlacePlayout
+    tree.near_playout_policy_distance = 2
+    best_move = tree.SearchMove(100000)
 
     time2 = time.time()
     cons.log(f"search step cost time: {time2-time1}s.")

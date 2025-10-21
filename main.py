@@ -19,6 +19,8 @@ import game_config
 
 def impl_pysdl2_init(window_name = "minimal ImGui/SDL2 example"):
     width, height = 1280, 720
+    width //= 2
+    height //= 2
 
     if SDL_Init(SDL_INIT_EVERYTHING) < 0:
         print(

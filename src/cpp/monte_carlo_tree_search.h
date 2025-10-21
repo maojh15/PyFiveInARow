@@ -14,6 +14,14 @@ inline int get_opponent_id(int stone_id) {
 
 class MonteCarloTreeSearch {
 public:
+    enum class PlayoutPolicy {
+        UniformPlayout = 0,
+        NearPlacePlayout = 1
+    };
+
+    int near_playout_policy_distance = 2;
+    PlayoutPolicy playout_policy = PlayoutPolicy::NearPlacePlayout;
+
     using StateType = std::vector<std::vector<int>>;
     struct TreeNode {
         StateType state;
@@ -55,6 +63,7 @@ public:
         }
     };
 
+    
     TreeNode root;
     int stone_id;
 

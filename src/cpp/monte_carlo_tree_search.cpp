@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <set>
 
 namespace {
 
@@ -155,17 +156,103 @@ int UniformPlayoutPolicy(const MonteCarloTreeSearch::StateType &board_state, int
     return 0;
 }
 
+
+std::vector<std::pair<int, int>> GetListOfNearEmptyPlace(int pos_x, int pos_y,
+    const MonteCarloTreeSearch::StateType &board_state,
+    int distance = 2)
+{
+    std::vector<std::pair<int, int>> res;
+    const int board_sz = board_state.size();
+    int left = std::max(0, pos_x - distance);
+    int up = std::max(0, pos_y - distance);
+    int right = std::min(board_sz - 1, pos_x + distance);
+    int down = std::min(board_sz - 1, pos_y + distance);
+    for (int i = left; i <= right; ++i) {
+        for (int j = up; j <= down; ++j) {
+            if (board_state[i][j] != 0) {
+                res.emplace_back(i, j);
+            }
+        }
+    }
+    return res;
+}
+
+
+std::set<std::pair<int,int>> ScanForEmptyPlace(const MonteCarloTreeSearch::StateType &board_state,
+    int distance = 2)
+{
+    std::set<std::pair<int, int>> res;
+    const int board_sz = board_state.size();
+    auto append_space_around = [&](int pos_x, int pos_y) {
+        auto list = GetListOfNearEmptyPlace(pos_x, pos_y, board_state, distance);
+        for (auto &x:list) {
+            res.emplace(x);
+        }
+    };
+    
+    bool empty_flag = true;
+    for (int i = 0; i < board_sz; ++i) {
+        for (int j = 0; j < board_sz; ++j) {
+            if (board_state[i][j] != 0) {
+                empty_flag = false;
+                append_space_around(i, j);
+            }
+        }
+    }
+    if (empty_flag) {
+        append_space_around(board_sz / 2, board_sz / 2);
+    }
+    return res;
+}
+
+
+/**
+ * place stones within certain distance to stones placed on board.
+ * @return 0 -> draw, 1 -> stone_id win, 2 -> stone_id loss
+ */
+int NearPlacePlayoutPolicy(const MonteCarloTreeSearch::StateType &board_state, int stone_id,
+                           int distance = 2)
+{
+    auto state = board_state;
+    const size_t board_sz = board_state.size();
+    auto record_empty_place = ScanForEmptyPlace(board_state, distance);
+    std::vector<std::pair<int, int>> candidate_place(record_empty_place.begin(), record_empty_place.end());
+
+    int cur_stone_id = stone_id;
+    while (!candidate_place.empty()) {
+        int sz = candidate_place.size();
+        std::uniform_int_distribution<int> rand_i(0, sz-1);
+        int idx = rand_i(rand_engine);
+        std::swap(candidate_place[idx], candidate_place[sz-1]);
+        state[candidate_place[sz-1].first][candidate_place[sz-1].second] = cur_stone_id;
+
+        int game_res = CheckIsGameEnd(state, candidate_place[sz-1]);
+        if (game_res == 1) {
+            return cur_stone_id == stone_id ? 1 : 2;
+        }
+        if (game_res == 2) {
+            return 0;
+        }
+
+        candidate_place.pop_back();
+        auto empty_list = ScanForEmptyPlace(state, distance);
+        for (auto &x: empty_list) {
+            if (record_empty_place.find(x) == record_empty_place.end()) {
+                record_empty_place.emplace(x);
+                candidate_place.emplace_back(x);
+            }
+        }
+        cur_stone_id = get_opponent_id(cur_stone_id);
+    }
+    return 0;
+}
+
 }
 
 
 std::pair<int, int> MonteCarloTreeSearch::SearchMove(int iter_steps)
 {
-    if (IsBoardEmpty(root.state)) {
-        const int board_sz = root.state.size();
-        return std::make_pair(board_sz / 2, board_sz / 2);
-    }
-
-    pybind11::gil_scoped_release gil_release;
+    // pybind11::gil_scoped_release gil_release;
     const int trans_game_res[3] = {0, 2, 1};
     int output_mark = iter_steps / 10;
     int percent = 0;
@@ -276,7 +363,14 @@ MonteCarloTreeSearch::TreeNode &MonteCarloTreeSearch::SearchLeaf(
  */
 int MonteCarloTreeSearch::RolloutPlay(const StateType &state, int stone_id)
 {
-    return UniformPlayoutPolicy(state, stone_id);
+    switch (playout_policy)
+    {
+    case PlayoutPolicy::UniformPlayout:
+        return UniformPlayoutPolicy(state, stone_id);
+    case PlayoutPolicy::NearPlacePlayout:
+    default:
+        return NearPlacePlayoutPolicy(state, stone_id, near_playout_policy_distance);
+    }
 }
 
 /**
