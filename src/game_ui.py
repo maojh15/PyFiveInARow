@@ -14,7 +14,7 @@ def get_mouse_grid(left_top_coord: list[float], line_interval: float):
     return grid_x, grid_y
 
 
-def draw_board(board_state: np.ndarray, player_use_black: bool):
+def draw_board(board_state: np.ndarray, player_use_black: bool, last_place_pos):
     io = imgui.get_io()
     draw_list: imgui.ImDrawList = imgui.get_background_draw_list()
     board_sz = int(min(*io.display_size) * 0.9)
@@ -82,6 +82,15 @@ def draw_board(board_state: np.ndarray, player_use_black: bool):
                                          rect_shape_pmin[1] + j * line_interval),
                                         stone_r,
                                         black_col if board_state[i,j] == 1 else white_col)
+
+    if last_place_pos is not None:
+        red_col = imgui.get_color_u32((1,0,0,1))
+        pos = (last_place_pos[0] * line_interval + rect_shape_pmin[0], last_place_pos[1] * line_interval + rect_shape_pmin[1])
+        hint_len = 6
+        draw_list.add_line((pos[0]-hint_len, pos[1]), (pos[0]+hint_len, pos[1]),
+                           red_col, 3)
+        draw_list.add_line((pos[0],pos[1]-hint_len), (pos[0],pos[1]+hint_len),
+                           red_col, 3)
 
     return rect_shape_pmin, rect_shape_pmax
 

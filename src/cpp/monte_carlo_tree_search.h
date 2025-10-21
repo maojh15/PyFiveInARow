@@ -1,0 +1,135 @@
+#ifndef __MONTE_CARLO_TREE_SEARCH_H__
+#define __MONTE_CARLO_TREE_SEARCH_H__
+
+#include <vector>
+#include <numeric>
+#include <cmath>
+#include <random>
+#include <pybind11/numpy.h>
+#include <iostream>
+
+inline int get_opponent_id(int stone_id) {
+    return 3 - stone_id;
+}
+
+class MonteCarloTreeSearch {
+public:
+    using StateType = std::vector<std::vector<int>>;
+    struct TreeNode {
+        StateType state;
+        TreeNode* parent;
+        int stone_id;
+        std::pair<int, int> from_moving;
+        std::vector<TreeNode> children;
+        double win_rounds = 0;
+        int total_rounds = 0;
+        double exploit_priority = 0.0;
+
+        TreeNode(const StateType &state, TreeNode* parent, int stone_id,
+                 const std::pair<int, int> from_moving) : state{state},
+                 parent{parent}, stone_id{stone_id}, from_moving{from_moving} {
+            UpdateExploitPriority();
+        }
+
+        void UpdateRounds(double added_win_rounds, int added_total_rounds) {
+            win_rounds += added_win_rounds;
+            total_rounds += added_total_rounds;
+        }
+
+        void UpdateExploitPriority() {
+            if (parent == nullptr) {
+                return;
+            }
+            exploit_priority = ComputeExploitPriority(parent->total_rounds);
+        }
+
+    private:
+        double ComputeExploitPriority(int parent_total_rounds) {
+            const double coef = 1.4142135623730951; // sqrt(2)
+            if (total_rounds == 0) {
+                return std::numeric_limits<double>::infinity();
+            }
+            double win_ratio = win_rounds / total_rounds;
+            double exploit = coef * std::sqrt(std::log(parent_total_rounds) / total_rounds);
+            return win_ratio + exploit;
+        }
+    };
+
+    TreeNode root;
+    int stone_id;
+
+    MonteCarloTreeSearch(const StateType &root_state, int stone_id) : 
+        root(root_state, nullptr, get_opponent_id(stone_id), {-1, -1}), stone_id{stone_id} {
+    }
+
+    MonteCarloTreeSearch(const pybind11::array_t<int> &root_state, int stone_id) :
+        MonteCarloTreeSearch(ConvertNumpyToStateType(root_state), stone_id){
+    }
+
+    std::pair<int, int> SearchMove(int iter_steps = 5000);
+
+    TreeNode *Selection();
+
+    void Expansion(TreeNode &leaf);
+
+    void BackPropagation(TreeNode& node, int leaf_stone_id, int game_res);
+
+    int GetTreeNodesNumbers() const {
+        return GetTreeNodesNumbers_(root);
+    }
+
+    int GetTreeDepth() const {
+        return GetTreeDepth_(root);
+    }
+
+    std::vector<int> StaticDepthNodesNumbers() const {
+        std::vector<int> depth_nodes_numbers;
+        std::function<void(const TreeNode &, int)> dfs =
+            [&](const TreeNode &node, int depth) {
+                if (depth >= depth_nodes_numbers.size()) {
+                    depth_nodes_numbers.push_back(0);
+                }
+                depth_nodes_numbers[depth] += 1;
+                for (const auto &ch : node.children) {
+                    dfs(ch, depth + 1);
+                }
+            };
+        dfs(root, 0);
+        return depth_nodes_numbers;
+    }
+
+private:
+    int GetTreeNodesNumbers_(const TreeNode &node) const {
+        int count = 1;
+        for (auto &ch : node.children) {
+            count += GetTreeNodesNumbers_(ch);
+        }
+        return count;
+    }
+
+    int GetTreeDepth_(const TreeNode &node) const {
+        int depth = 0;
+        for (auto &ch : node.children) {
+            depth = std::max(depth, GetTreeDepth_(ch));
+        }
+        return depth + 1;
+    }
+
+
+    TreeNode &GetMostTotalRoundsChild();
+    int RolloutPlay(const StateType &state, int stone_id);
+    TreeNode &SearchLeaf(TreeNode &node);
+
+    static StateType ConvertNumpyToStateType(const pybind11::array_t<int> &array) {
+        auto buf = array.unchecked<2>(); // 2D array
+        StateType state(buf.shape(0), std::vector<int>(buf.shape(1)));
+        for (size_t i = 0; i < buf.shape(0); ++i) {
+            for (size_t j = 0; j < buf.shape(1); ++j) {
+                state[i][j] = buf(i, j);
+            }
+        }
+        return state;
+    }
+};
+
+#endif // __MONTE_CARLO_TREE_SEARCH_H__

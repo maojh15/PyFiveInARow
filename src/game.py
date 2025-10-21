@@ -43,7 +43,8 @@ class Game(Singleton):
     
     def render_ui(self):
         # draw board
-        self.board_shape = game_ui.draw_board(self.board_state, self.who_first == 0)
+        self.board_shape = game_ui.draw_board(self.board_state, self.who_first == 0,
+                                              None if len(self.record_stone_places) == 0 else self.record_stone_places[-1])
 
         # draw ui buttons and hint text
         self.draw_buttons_ui()
@@ -61,6 +62,7 @@ class Game(Singleton):
                 self.reset_game_status()
             elif res == 1:
                 self.status = Game.GameStatus.EXIT
+                cons.log(f"self.status={self.status}")
 
 
     def draw_ai_thinking_hint(self):
@@ -77,8 +79,11 @@ class Game(Singleton):
 
     def start_AI_step(self):
         self.thread_future = self.thread_pool.submit(game_AI.AI_step, self.board_state, 2-self.who_first)
+        cons.log(f"start AI step")
 
     def get_AI_step(self):
+        if self.status != Game.GameStatus.PLAYING:
+            return
         if self.thread_future is None:
             # 没有异步任务，启动一个并返回（非阻塞）
             self.start_AI_step()
@@ -87,15 +92,10 @@ class Game(Singleton):
         # 检查线程是否完成，未完成则直接返回（等待下一帧再检查）
         if not self.thread_future.done():
             return False
-
+        cons.log(f"thread task done")
         # 任务已完成，取出结果并处理异常
-        try:
-            pos_x, pos_y = self.thread_future.result()
-        except Exception as e:
-            # 出错时退回到同步调用以保证游戏能继续
-            pos_x, pos_y = game_AI.AI_step(self.board_state, 2 - self.who_first)
-        finally:
-            self.thread_future = None
+        pos_x, pos_y = self.thread_future.result()
+        self.thread_future = None
         self.place_stone(pos_x, pos_y, 2 - self.who_first)
         self.players_turn = True
         return True
@@ -172,7 +172,7 @@ class Game(Singleton):
     def place_stone(self, pos_x, pos_y, stone):
         self.board_state[pos_x, pos_y] = stone
         self.record_stone_places.append([pos_x, pos_y])
-        check_res = game_utils.is_game_end(self.board_state, stone)
+        check_res = game_utils.check_is_game_end(self.board_state, (pos_x, pos_y))
         if check_res == 0:
             return
         self.status = self.GameStatus.GAME_END
