@@ -69,10 +69,8 @@ class Game(Singleton):
         imgui_io = imgui.get_io()
         imgui.open_popup("AI Thinking")
         popup_sz = (200, 80)
-        imgui.set_next_window_pos(((imgui_io.display_size[0] - popup_sz[0])/2,
-                                   (imgui_io.display_size[1] - popup_sz[1])/2))
         imgui.set_next_window_size(popup_sz)
-        if imgui.begin_popup_modal("AI Thinking"):
+        if imgui.begin_popup_modal("AI Thinking", None, imgui.WindowFlags_.no_resize)[0]:
             imgui.text("AI Thinking ... ")
             imgui.end_popup()
         

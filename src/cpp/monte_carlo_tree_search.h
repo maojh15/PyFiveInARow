@@ -7,6 +7,7 @@
 #include <random>
 #include <pybind11/numpy.h>
 #include <iostream>
+#include <memory>
 
 inline int get_opponent_id(int stone_id) {
     return 3 - stone_id;
@@ -25,16 +26,16 @@ public:
     using StateType = std::vector<std::vector<int>>;
     struct TreeNode {
         StateType state;
-        TreeNode* parent;
+        std::shared_ptr<TreeNode> parent;
         int stone_id;
         std::pair<int, int> from_moving;
-        std::vector<TreeNode> children;
+        std::vector<std::shared_ptr<TreeNode>> children;
         double win_rounds = 0;
         int total_rounds = 0;
         double exploit_priority = 0.0;
 
-        TreeNode(const StateType &state, TreeNode* parent, int stone_id,
-                 const std::pair<int, int> from_moving) : state{state},
+        TreeNode(const StateType &state, std::shared_ptr<TreeNode> parent, int stone_id,
+                 const std::pair<int, int> &from_moving) : state{state},
                  parent{parent}, stone_id{stone_id}, from_moving{from_moving} {
             UpdateExploitPriority();
         }
@@ -64,11 +65,12 @@ public:
     };
 
     
-    TreeNode root;
+    std::shared_ptr<TreeNode> root;
     int stone_id;
 
     MonteCarloTreeSearch(const StateType &root_state, int stone_id) : 
-        root(root_state, nullptr, get_opponent_id(stone_id), {-1, -1}), stone_id{stone_id} {
+        stone_id{stone_id} {
+        root = std::make_shared<TreeNode>(root_state, nullptr, get_opponent_id(stone_id), std::pair{-1, -1});
     }
 
     MonteCarloTreeSearch(const pybind11::array_t<int> &root_state, int stone_id) :
@@ -77,18 +79,18 @@ public:
 
     std::pair<int, int> SearchMove(int iter_steps = 5000);
 
-    TreeNode *Selection();
+    std::shared_ptr<TreeNode> Selection();
 
-    void Expansion(TreeNode &leaf);
+    void Expansion(std::shared_ptr<TreeNode> leaf);
 
-    void BackPropagation(TreeNode& node, int leaf_stone_id, int game_res);
+    void BackPropagation(std::shared_ptr<TreeNode> node, int leaf_stone_id, int game_res);
 
     int GetTreeNodesNumbers() const {
-        return GetTreeNodesNumbers_(root);
+        return GetTreeNodesNumbers_(*root);
     }
 
     int GetTreeDepth() const {
-        return GetTreeDepth_(root);
+        return GetTreeDepth_(*root);
     }
 
     std::vector<int> StaticDepthNodesNumbers() const {
@@ -100,10 +102,10 @@ public:
                 }
                 depth_nodes_numbers[depth] += 1;
                 for (const auto &ch : node.children) {
-                    dfs(ch, depth + 1);
+                    dfs(*ch, depth + 1);
                 }
             };
-        dfs(root, 0);
+        dfs(*root, 0);
         return depth_nodes_numbers;
     }
 
@@ -111,7 +113,7 @@ private:
     int GetTreeNodesNumbers_(const TreeNode &node) const {
         int count = 1;
         for (auto &ch : node.children) {
-            count += GetTreeNodesNumbers_(ch);
+            count += GetTreeNodesNumbers_(*ch);
         }
         return count;
     }
@@ -119,15 +121,15 @@ private:
     int GetTreeDepth_(const TreeNode &node) const {
         int depth = 0;
         for (auto &ch : node.children) {
-            depth = std::max(depth, GetTreeDepth_(ch));
+            depth = std::max(depth, GetTreeDepth_(*ch));
         }
         return depth + 1;
     }
 
 
-    TreeNode &GetMostTotalRoundsChild();
+    std::shared_ptr<TreeNode> GetMostTotalRoundsChild();
     int RolloutPlay(const StateType &state, int stone_id);
-    TreeNode &SearchLeaf(TreeNode &node);
+    std::shared_ptr<TreeNode> SearchLeaf(std::shared_ptr<TreeNode> node);
 
     static StateType ConvertNumpyToStateType(const pybind11::array_t<int> &array) {
         auto buf = array.unchecked<2>(); // 2D array

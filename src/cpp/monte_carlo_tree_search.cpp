@@ -169,7 +169,7 @@ std::vector<std::pair<int, int>> GetListOfNearEmptyPlace(int pos_x, int pos_y,
     int down = std::min(board_sz - 1, pos_y + distance);
     for (int i = left; i <= right; ++i) {
         for (int j = up; j <= down; ++j) {
-            if (board_state[i][j] != 0) {
+            if (board_state[i][j] == 0) {
                 res.emplace_back(i, j);
             }
         }
@@ -234,8 +234,8 @@ int NearPlacePlayoutPolicy(const MonteCarloTreeSearch::StateType &board_state, i
             return 0;
         }
 
+        auto empty_list = GetListOfNearEmptyPlace(candidate_place[sz-1].first, candidate_place[sz-1].second, state, distance);
         candidate_place.pop_back();
-        auto empty_list = ScanForEmptyPlace(state, distance);
         for (auto &x: empty_list) {
             if (record_empty_place.find(x) == record_empty_place.end()) {
                 record_empty_place.emplace(x);
@@ -252,23 +252,23 @@ int NearPlacePlayoutPolicy(const MonteCarloTreeSearch::StateType &board_state, i
 
 std::pair<int, int> MonteCarloTreeSearch::SearchMove(int iter_steps)
 {
-    // pybind11::gil_scoped_release gil_release;
+    pybind11::gil_scoped_release gil_release;
     const int trans_game_res[3] = {0, 2, 1};
     int output_mark = iter_steps / 10;
     int percent = 0;
     for (int itr = 0; itr < iter_steps; ++itr) {
-        TreeNode *leaf = Selection();
+        auto leaf = Selection();
         if (leaf == nullptr) {
             continue;
         }
         int game_res = CheckIsGameEnd(leaf->state, leaf->from_moving);
         if (game_res != 0) {
-            BackPropagation(*leaf, leaf->stone_id, game_res == 1 ? 1 : 0);
+            BackPropagation(leaf, leaf->stone_id, game_res == 1 ? 1 : 0);
             continue;
         }
         game_res = RolloutPlay(leaf->state, get_opponent_id(leaf->stone_id));
         // game_res == 1 means (3 - leaf.stone_id) win, thus leaf loss game.
-        BackPropagation(*leaf, leaf->stone_id, trans_game_res[game_res]);
+        BackPropagation(leaf, leaf->stone_id, trans_game_res[game_res]);
         if (itr % output_mark == 0) {
             percent += 10;
             std::cout << percent << "% " << std::flush;
@@ -277,31 +277,31 @@ std::pair<int, int> MonteCarloTreeSearch::SearchMove(int iter_steps)
     std::cout << "100%" << std::endl;
 
     const auto &most_total_child = GetMostTotalRoundsChild();
-    std::cout << "win ratio: " << most_total_child.win_rounds << "/"
-              << most_total_child.total_rounds << "="
-              << (most_total_child.win_rounds / most_total_child.total_rounds) << std::endl;
-    return most_total_child.from_moving;
+    std::cout << "win ratio: " << most_total_child->win_rounds << "/"
+              << most_total_child->total_rounds << "="
+              << (most_total_child->win_rounds / most_total_child->total_rounds) << std::endl;
+    return most_total_child->from_moving;
 }
 
-MonteCarloTreeSearch::TreeNode *MonteCarloTreeSearch::Selection()
+std::shared_ptr<MonteCarloTreeSearch::TreeNode>MonteCarloTreeSearch::Selection()
 {
-    TreeNode &leaf = SearchLeaf(root);
-    int game_res = leaf.from_moving.first < 0 ? 0 : CheckIsGameEnd(leaf.state, leaf.from_moving);
+    std::shared_ptr<TreeNode> leaf = SearchLeaf(root);
+    int game_res = leaf->from_moving.first < 0 ? 0 : CheckIsGameEnd(leaf->state, leaf->from_moving);
     if (game_res != 0) {
-        BackPropagation(leaf, leaf.stone_id, game_res == 1 ? 1 : 0);
+        BackPropagation(leaf, leaf->stone_id, game_res == 1 ? 1 : 0);
         return nullptr;
     }
     Expansion(leaf);
-    return &(leaf.children[0]);
+    return leaf->children[0];
 }
 
 /**
  * @param game_res: 0->draw; 1->leaf_stone_id win; 2->leaf_stone_id loss.
  */
-void MonteCarloTreeSearch::BackPropagation(TreeNode& node, int leaf_stone_id, int game_res)
+void MonteCarloTreeSearch::BackPropagation(std::shared_ptr<TreeNode> node, int leaf_stone_id, int game_res)
 {
-    std::vector<TreeNode *> path;
-    TreeNode *cur = &node;
+    std::vector<std::shared_ptr<TreeNode>> path;
+    std::shared_ptr<TreeNode> cur = node;
     while (cur != nullptr) {
         switch (game_res)
         {
@@ -323,39 +323,62 @@ void MonteCarloTreeSearch::BackPropagation(TreeNode& node, int leaf_stone_id, in
     }
 }
 
-void MonteCarloTreeSearch::Expansion(TreeNode &leaf)
+void MonteCarloTreeSearch::Expansion(std::shared_ptr<TreeNode> leaf)
 {
-    int opponent_stone_id = get_opponent_id(leaf.stone_id);
-    const int board_sz = leaf.state.size();
-    for (int i = 0; i < board_sz; ++i) {
-        for (int j = 0; j < board_sz; ++j) {
-            if (leaf.state[i][j] == 0) {
-                leaf.state[i][j] = opponent_stone_id;
-                leaf.children.emplace_back(leaf.state, &leaf, opponent_stone_id, std::make_pair(i, j));
-                leaf.state[i][j] = 0;
+    const int board_sz = leaf->state.size();
+    int opponent_stone_id = get_opponent_id(leaf->stone_id);
+    auto expansion_uniform = [&]() {
+        for (int i = 0; i < board_sz; ++i) {
+            for (int j = 0; j < board_sz; ++j) {
+                if (leaf->state[i][j] == 0) {
+                    leaf->state[i][j] = opponent_stone_id;
+                    auto new_node = std::make_shared<TreeNode>(leaf->state, leaf, opponent_stone_id, std::make_pair(i, j));
+                    leaf->children.emplace_back(new_node);
+                    leaf->state[i][j] = 0;
+                }
             }
         }
+    };
+
+    auto expansion_near_place = [&]() {
+        auto candidates = ScanForEmptyPlace(leaf->state, near_playout_policy_distance);
+        for (auto &pos : candidates) {
+            leaf->state[pos.first][pos.second] = opponent_stone_id;
+            auto new_node = std::make_shared<TreeNode>(leaf->state, leaf, opponent_stone_id, pos);
+            leaf->children.emplace_back(new_node);
+            leaf->state[pos.first][pos.second] = 0;
+        }
+    };
+
+    switch (playout_policy) {
+    case PlayoutPolicy::UniformPlayout:
+        expansion_uniform();
+        break;
+    case PlayoutPolicy::NearPlacePlayout:
+    default:
+        expansion_near_place();
+        break;
     }
-    std::shuffle(leaf.children.begin(), leaf.children.end(), rand_engine);
+    std::shuffle(leaf->children.begin(), leaf->children.end(), rand_engine);
 }
 
 
-MonteCarloTreeSearch::TreeNode &MonteCarloTreeSearch::SearchLeaf(
-    MonteCarloTreeSearch::TreeNode &node)
+std::shared_ptr<MonteCarloTreeSearch::TreeNode> MonteCarloTreeSearch::SearchLeaf(
+    std::shared_ptr<MonteCarloTreeSearch::TreeNode> node)
 {
-    TreeNode *cur = &node;
+    std::shared_ptr<TreeNode> cur = node;
     while (!cur->children.empty()) {
-        double max_exploit = cur->children[0].exploit_priority;
+        double max_exploit = cur->children[0]->exploit_priority;
         size_t max_arg = 0;
         for (size_t i = 1; i < cur->children.size(); ++i) {
-            if (cur->children[i].exploit_priority > max_exploit) {
-                max_exploit = cur->children[i].exploit_priority;
+            if (cur->children[i]->exploit_priority > max_exploit) {
+                max_exploit = cur->children[i]->exploit_priority;
                 max_arg = i;
             }
         }
-        cur = &(cur->children[max_arg]);
+        cur = cur->children[max_arg];
     }
-    return *cur;
+    return cur;
 }
 
 /**
@@ -376,19 +399,19 @@ int MonteCarloTreeSearch::RolloutPlay(const StateType &state, int stone_id)
 /**
  * Move to most exploited nodes
  */
-MonteCarloTreeSearch::TreeNode &MonteCarloTreeSearch::GetMostTotalRoundsChild()
+std::shared_ptr<MonteCarloTreeSearch::TreeNode> MonteCarloTreeSearch::GetMostTotalRoundsChild()
 {
-    if (root.children.empty()) {
+    if (root->children.empty()) {
         throw std::runtime_error("No succesive state exist for root node!");
     }
-    int max_total_rounds = root.children[0].total_rounds;
+    int max_total_rounds = root->children[0]->total_rounds;
     size_t max_arg = 0;
-    for (size_t i = 1; i < root.children.size(); ++i) {
-        if (root.children[i].total_rounds > max_total_rounds) {
-            max_total_rounds = root.children[i].total_rounds;
+    for (size_t i = 1; i < root->children.size(); ++i) {
+        if (root->children[i]->total_rounds > max_total_rounds) {
+            max_total_rounds = root->children[i]->total_rounds;
             max_arg = i;
         }
     }
-    return root.children[max_arg];
+    return root->children[max_arg];
 }
 

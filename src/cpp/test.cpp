@@ -33,7 +33,7 @@ void TestFunc(int board_sz = 11) {
               << std::chrono::duration<double>(time2 - time1).count()
               << "s\n";
     std::cout << "Tree size: " << tree.GetTreeNodesNumbers()
-              << ", depth: " << tree.GetTreeDepth() << "\n";
+              << ", depth: " << tree.GetTreeDepth() << std::endl;
     output_date_time("end test func");
 }
 
