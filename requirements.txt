@@ -1,0 +1,3 @@
+rich
+pysdl2
+imgui_bundle
