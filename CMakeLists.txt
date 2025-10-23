@@ -3,7 +3,7 @@ project(MonteCarloTreeSearch)
 set(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../..")
-find_package(Python3 3.11 EXACT COMPONENTS Interpreter Development REQUIRED)
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 include(FetchContent)
 
 # Try to find an installed pybind11 first
