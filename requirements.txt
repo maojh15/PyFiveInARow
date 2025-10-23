@@ -1,3 +1,4 @@
 rich
 pysdl2
 imgui_bundle
+typing_extensions
