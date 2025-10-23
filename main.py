@@ -107,13 +107,13 @@ def main():
         game.render_ui()
 
         # debug layout
-        if imgui.button("debug", (50, 0)):
-            game.log()
-        if imgui.button("reload game module"):
-            importlib.reload(GameUIMod)
-            importlib.reload(GameMod)
-            game = GameMod.Game()
-        changed, game_config.screen_bg_col = imgui.color_edit3("bg col", game_config.screen_bg_col)
+        # if imgui.button("debug", (50, 0)):
+        #     game.log()
+        # if imgui.button("reload game module"):
+        #     importlib.reload(GameUIMod)
+        #     importlib.reload(GameMod)
+        #     game = GameMod.Game()
+        # changed, game_config.screen_bg_col = imgui.color_edit3("bg col", game_config.screen_bg_col)
 
         # end debug layout
 
