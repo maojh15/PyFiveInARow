@@ -7,27 +7,27 @@ namespace py = pybind11;
 
 PYBIND11_MODULE(py_MCTS, m) {
      py::class_<MonteCarloTreeSearch>(m, "MonteCarloTreeSearch",
-          "Monte Carlo Tree Search 对象: 用于在五子棋中搜索最佳落子。")
+          "Monte Carlo Tree Search object: used to search for the best move in Gomoku.")
           .def(py::init<const py::array_t<int>&, int>(),
                py::arg("root_state"), py::arg("stone_id"),
-               "构造函数: root_state 为棋盘状态的 numpy 数组, stone_id 表示当前玩家的棋子 ID: 1->black; 2->white。")
+               "Constructor: root_state is the numpy array of board state, stone_id indicates current player's stone ID: 1->black; 2->white.")
           // public data members (read/write)
           .def_readwrite("near_playout_policy_distance", &MonteCarloTreeSearch::near_playout_policy_distance)
           .def_readwrite("playout_policy", &MonteCarloTreeSearch::playout_policy)
           .def("SearchMove", &MonteCarloTreeSearch::SearchMove, py::arg("iter_steps") = 5000,
-               "运行 MCTS 搜索并返回最佳落子。\n参数: iter_steps (可选) - 迭代步数，默认 5000。\n返回值: 最佳落子的位置或动作表示。")
+               "Run MCTS search and return the best move.\nParameters: iter_steps (optional) - number of iteration steps, default 5000.\nReturn value: position or action representation of the best move.")
           .def("Selection", &MonteCarloTreeSearch::Selection,
-               "选择阶段: 按 UCT 策略从根节点向下选择待扩展的节点。\n返回: 被选择的节点（或其索引/指针）。")
+               "Selection phase: Select nodes to expand from root node downward according to UCT policy.\nReturns: Selected node (or its index/pointer).")
           .def("Expansion", &MonteCarloTreeSearch::Expansion,
-               "扩展阶段: 对所选节点生成子节点（可行动作）。")
+               "Expansion phase: Generate child nodes (possible moves) for the selected node.")
           .def("BackPropagation", &MonteCarloTreeSearch::BackPropagation,
-               "回传阶段: 将模拟/对局结果回传到根节点，更新经过节点的胜负与访问次数统计。")
+               "Backpropagation phase: Propagate simulation/game result back to root node, updating win/loss statistics and visit counts for passed nodes.")
           .def("GetTreeNodesNumbers", &MonteCarloTreeSearch::GetTreeNodesNumbers,
                "Get numbers of nodes in tree")
           .def("GetTreeDepth", &MonteCarloTreeSearch::GetTreeDepth,
                "Get depth of tree")
           .def("StaticDepthNodesNumbers", &MonteCarloTreeSearch::StaticDepthNodesNumbers,
-               "返回每个深度上的节点数量（静态统计）。返回值为 std::vector<int>，会被转换为 Python 列表。");
+               "Return the number of nodes at each depth (static statistics). Return value is std::vector<int>, which will be converted to Python list.");
 
      // bind enum
      py::enum_<MonteCarloTreeSearch::PlayoutPolicy>(m, "PlayoutPolicy")
