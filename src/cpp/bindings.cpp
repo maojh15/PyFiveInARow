@@ -41,6 +41,5 @@ PYBIND11_MODULE(py_MCTS, m) {
           .def_readonly("stone_id", &MonteCarloTreeSearch::TreeNode::stone_id)
           .def_readonly("from_moving", &MonteCarloTreeSearch::TreeNode::from_moving)
           .def_readonly("win_rounds", &MonteCarloTreeSearch::TreeNode::win_rounds)
-          .def_readonly("total_rounds", &MonteCarloTreeSearch::TreeNode::total_rounds)
-          .def_readonly("exploit_priority", &MonteCarloTreeSearch::TreeNode::exploit_priority);
+          .def_readonly("total_rounds", &MonteCarloTreeSearch::TreeNode::total_rounds);
 }

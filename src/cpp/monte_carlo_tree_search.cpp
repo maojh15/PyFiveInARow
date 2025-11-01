@@ -1,9 +1,12 @@
 #include "monte_carlo_tree_search.h"
 #include <pybind11/pybind11.h>
+#include "pgbar/ProgressBar.hpp"
+#include "pgbar/BlockBar.hpp"
 
 #include <algorithm>
 #include <iostream>
 #include <set>
+#include <chrono>
 
 namespace {
 
@@ -253,33 +256,44 @@ int NearPlacePlayoutPolicy(const MonteCarloTreeSearch::StateType &board_state, i
 std::pair<int, int> MonteCarloTreeSearch::SearchMove(int iter_steps)
 {
     pybind11::gil_scoped_release gil_release;
+    pgbar::BlockBar<> pbar;
+    pbar.config().prefix("search move ");
+    pbar.config().style( pgbar::config::Line::Entire ).tasks(iter_steps);
+
+    auto time1 = std::chrono::high_resolution_clock::now();
+
     const int trans_game_res[3] = {0, 2, 1};
-    int output_mark = iter_steps / 10;
-    int percent = 0;
     for (int itr = 0; itr < iter_steps; ++itr) {
         auto leaf = Selection();
         if (leaf == nullptr) {
+            pbar.tick();
             continue;
         }
         int game_res = CheckIsGameEnd(leaf->state, leaf->from_moving);
         if (game_res != 0) {
             BackPropagation(leaf, leaf->stone_id, game_res == 1 ? 1 : 0);
+            pbar.tick();
             continue;
         }
         game_res = RolloutPlay(leaf->state, get_opponent_id(leaf->stone_id));
         // game_res == 1 means (3 - leaf.stone_id) win, thus leaf loss game.
         BackPropagation(leaf, leaf->stone_id, trans_game_res[game_res]);
-        if (itr % output_mark == 0) {
-            percent += 10;
-            std::cout << percent << "% " << std::flush;
-        }
+        pbar.tick();
     }
-    std::cout << "100%" << std::endl;
 
     const auto &most_total_child = GetMostTotalRoundsChild();
+    auto time2 = std::chrono::high_resolution_clock::now();
     std::cout << "win ratio: " << most_total_child->win_rounds << "/"
               << most_total_child->total_rounds << "="
-              << (most_total_child->win_rounds / most_total_child->total_rounds) << std::endl;
+              << (most_total_child->win_rounds / most_total_child->total_rounds)
+              << "\tcost time: " << std::chrono::duration<double>(time2-time1).count()
+              << "s" << std::endl;
+    for (auto &ch : root->children) {
+        std::cout << "[" << ch->from_moving.first << "," << ch->from_moving.second
+            << "|" << ch->win_rounds << "/" << ch->total_rounds << "="
+            << (ch->win_rounds / ch->total_rounds)  <<"], ";
+    }
+    std::cout << std::endl;
     return most_total_child->from_moving;
 }
 
@@ -300,7 +314,6 @@ std::shared_ptr<MonteCarloTreeSearch::TreeNode>MonteCarloTreeSearch::Selection()
  */
 void MonteCarloTreeSearch::BackPropagation(std::shared_ptr<TreeNode> node, int leaf_stone_id, int game_res)
 {
-    std::vector<std::shared_ptr<TreeNode>> path;
     std::shared_ptr<TreeNode> cur = node;
     while (cur != nullptr) {
         switch (game_res)
@@ -315,11 +328,7 @@ void MonteCarloTreeSearch::BackPropagation(std::shared_ptr<TreeNode> node, int l
             cur->UpdateRounds(0.5, 1);
             break;
         }
-        path.emplace_back(cur);
         cur = cur->parent;
-    }
-    for (auto &n : path) {
-        n->UpdateExploitPriority();
     }
 }
 
@@ -368,15 +377,10 @@ std::shared_ptr<MonteCarloTreeSearch::TreeNode> MonteCarloTreeSearch::SearchLeaf
 {
     std::shared_ptr<TreeNode> cur = node;
     while (!cur->children.empty()) {
-        double max_exploit = cur->children[0]->exploit_priority;
-        size_t max_arg = 0;
-        for (size_t i = 1; i < cur->children.size(); ++i) {
-            if (cur->children[i]->exploit_priority > max_exploit) {
-                max_exploit = cur->children[i]->exploit_priority;
-                max_arg = i;
-            }
-        }
-        cur = cur->children[max_arg];
+        cur = *std::max_element(cur->children.begin(), cur->children.end(),
+            [](const std::shared_ptr<TreeNode> &a, const std::shared_ptr<TreeNode> &b) {
+                return a->GetExploitPriority() < b->GetExploitPriority();
+            });
     }
     return cur;
 }

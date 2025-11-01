@@ -32,12 +32,10 @@ public:
         std::vector<std::shared_ptr<TreeNode>> children;
         double win_rounds = 0;
         int total_rounds = 0;
-        double exploit_priority = 0.0;
 
         TreeNode(const StateType &state, std::shared_ptr<TreeNode> parent, int stone_id,
                  const std::pair<int, int> &from_moving) : state{state},
                  parent{parent}, stone_id{stone_id}, from_moving{from_moving} {
-            UpdateExploitPriority();
         }
 
         void UpdateRounds(double added_win_rounds, int added_total_rounds) {
@@ -45,21 +43,21 @@ public:
             total_rounds += added_total_rounds;
         }
 
-        void UpdateExploitPriority() {
+        double GetExploitPriority() const {
             if (parent == nullptr) {
-                return;
+                return 0.0;
             }
-            exploit_priority = ComputeExploitPriority(parent->total_rounds);
+            return ComputeExploitPriority(parent->total_rounds);
         }
 
     private:
-        double ComputeExploitPriority(int parent_total_rounds) {
+        double ComputeExploitPriority(int parent_total_rounds) const {
             const double coef = 1.4142135623730951; // sqrt(2)
             if (total_rounds == 0) {
                 return std::numeric_limits<double>::infinity();
             }
             double win_ratio = win_rounds / total_rounds;
-            double exploit = coef * std::sqrt(std::log(parent_total_rounds) / total_rounds);
+            double exploit = coef * std::sqrt(std::log<double>(parent_total_rounds) / total_rounds);
             return win_ratio + exploit;
         }
     };
